@@ -1,0 +1,5 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <StartArguments>--url https://localhost:4443/sdk/vimservice --server localhost --portnumber 4443 --ignorecert --username administrator --password Yv74aL5j --DatacenterName Automation --vmPath /Automation/vm/Win2008x32Ent --CloneName Test2k8Clone</StartArguments>
+  </PropertyGroup>
+</Project>

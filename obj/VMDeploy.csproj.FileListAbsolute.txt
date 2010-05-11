@@ -1,0 +1,8 @@
+F:\AutoInstallProject\SDK\samples\DotNet\cs\VMDeploy\bin\Debug\VMDeploy.exe
+F:\AutoInstallProject\SDK\samples\DotNet\cs\VMDeploy\bin\Debug\VMDeploy.pdb
+F:\AutoInstallProject\SDK\samples\DotNet\cs\VMDeploy\obj\Debug\ResolveAssemblyReference.cache
+F:\AutoInstallProject\SDK\samples\DotNet\cs\VMDeploy\obj\Debug\VMDeploy.Properties.Resources.resources
+F:\AutoInstallProject\SDK\samples\DotNet\cs\VMDeploy\obj\Debug\VMDeploy.csproj.GenerateResource.Cache
+F:\AutoInstallProject\SDK\samples\DotNet\cs\VMDeploy\obj\Debug\VMDeploy.exe
+F:\AutoInstallProject\SDK\samples\DotNet\cs\VMDeploy\obj\Debug\VMDeploy.pdb
+F:\AutoInstallProject\SDK\samples\DotNet\cs\VMDeploy\bin\Debug\VMware.Security.CredentialStore.pdb
