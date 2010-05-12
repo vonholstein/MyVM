@@ -10,62 +10,104 @@ using VimApi;
 
 namespace VMDeploy
 {
+    class VMResource
+    {
+        public static String[] connectString = null;
+        //--url https://localhost:4443/sdk/vimservice --server localhost --portnumber 4443 --ignorecert --username administrator --password Yv74aL5j  --operation rebootGuest --vmname DeployedTemplate
+        public static void buildConnectString(string url, string server, string portnumber, string username, string password, string hostname)
+        {
+            string tempConnectString;
+            tempConnectString = " --url " + url + " --server " + server + " --portnumber " + portnumber + " --username " + username + " --password " + password + " --ignorecert";
+            connectString = tempConnectString.Trim().Split(new char[] {' '});
+        }
+    }
+
     class VMDeploy
     {
-        private static AppUtil.AppUtil cb = null;
-        static VimService _service;
-        static ServiceContent _sic;
-        private void cloneVM()
+        static VimService _service;        
+
+        private AppUtil.AppUtil cb = null;        
+        private ServiceContent _sic;
+
+        private string templateName;
+        private string[] dnsList;
+        private string workGroupPassword;
+        private string hostName;
+        private string domainAdmin;
+        private string domainPassword;
+        private string joinDomain;
+        private string name; //Machine name
+        private string productId;
+        private string cloneName;
+        private string vmPath;
+        private string datacenterName;
+
+        public VMDeploy(string hostName, string templateName, string name, string[] dnsList, string workGroupPassword, string domainAdmin, string domainPassword, string joinDomain, string productId, string cloneName, string datacenterName)
+        {
+            this.templateName = templateName;
+            this.dnsList = dnsList;
+            this.workGroupPassword = workGroupPassword;
+            this.hostName = hostName;
+            this.domainAdmin = domainAdmin;
+            this.domainPassword = domainPassword;
+            this.joinDomain = joinDomain;
+            this.name = name;
+            this.productId = productId;
+            this.cloneName = cloneName;
+            this.datacenterName = datacenterName;
+            this.vmPath = "/" + this.datacenterName + "/vm/" + this.templateName;
+        }
+
+        private void deployVM()
         {
             _service = cb.getConnection()._service;
             _sic = cb.getConnection()._sic;
-            String cloneName = cb.get_option("CloneName");
-            String vmPath = cb.get_option("vmPath");
-            String datacenterName = cb.get_option("DatacenterName");
-
+            
+            // ManagedObjectReferences
+            ManagedObjectReference datacenterRef;
+            ManagedObjectReference vmFolderRef;
+            ManagedObjectReference vmRef; 
+            ManagedObjectReference hfmor; // hostFolder reference
+            ArrayList crmors; // ArrayList of ComputeResource references
+            ManagedObjectReference hostmor;
+            ManagedObjectReference crmor = null; // ComputeResource reference
+            ManagedObjectReference resourcePool;
 
             // Find the Datacenter reference by using findByInventoryPath().
-            ManagedObjectReference datacenterRef
-               = _service.FindByInventoryPath(_sic.searchIndex, datacenterName);
+            datacenterRef = _service.FindByInventoryPath(_sic.searchIndex, this.datacenterName);
+
             if (datacenterRef == null)
             {
                 Console.WriteLine("The specified datacenter is not found");
                 return;
             }
 
-
-
             // Find the virtual machine folder for this datacenter.
-            ManagedObjectReference vmFolderRef
-               = (ManagedObjectReference)cb.getServiceUtil().GetMoRefProp(datacenterRef, "vmFolder");
+            vmFolderRef = (ManagedObjectReference)cb.getServiceUtil().GetMoRefProp(datacenterRef, "vmFolder");
             if (vmFolderRef == null)
             {
                 Console.WriteLine("The virtual machine is not found");
                 return;
             }
 
-
-            ManagedObjectReference vmRef
-               = _service.FindByInventoryPath(_sic.searchIndex, vmPath);
+            vmRef = _service.FindByInventoryPath(_sic.searchIndex, this.vmPath);
             if (vmRef == null)
             {
                 Console.WriteLine("The virtual machine is not found");
                 return;
             }
 
-            ManagedObjectReference hfmor
-         = cb.getServiceUtil().GetMoRefProp(datacenterRef, "hostFolder");   
-            ArrayList crmors
-               = cb.getServiceUtil().GetDecendentMoRefs(hfmor, "ComputeResource", null);
+            // Code for obtaining managed object reference to resource root
 
-            String hostName = "172.16.196.23";
-            ManagedObjectReference hostmor;
-            if (hostName != null)
+            hfmor = cb.getServiceUtil().GetMoRefProp(datacenterRef, "hostFolder");   
+            crmors = cb.getServiceUtil().GetDecendentMoRefs(hfmor, "ComputeResource", null);         
+
+            if (this.hostName != null)
             {
-                hostmor = cb.getServiceUtil().GetDecendentMoRef(hfmor, "HostSystem", hostName);
+                hostmor = cb.getServiceUtil().GetDecendentMoRef(hfmor, "HostSystem", this.hostName);
                 if (hostmor == null)
                 {
-                    Console.WriteLine("Host " + hostName + " not found");
+                    Console.WriteLine("Host " + this.hostName + " not found");
                     return;
                 }
             }
@@ -73,8 +115,7 @@ namespace VMDeploy
             {
                 hostmor = cb.getServiceUtil().GetFirstDecendentMoRef(datacenterRef, "HostSystem");
             }
-
-            ManagedObjectReference crmor = null;
+            
             hostName = (String)cb.getServiceUtil().GetDynamicProperty(hostmor, "name");
             for (int i = 0; i < crmors.Count; i++)
             {
@@ -85,9 +126,8 @@ namespace VMDeploy
                 {
                     for (int j = 0; j < hrmors.Length; j++)
                     {
-                        String hname
-                           = (String)cb.getServiceUtil().GetDynamicProperty(hrmors[j], "name");
-                        if (hname.Equals(hostName))
+                        String hname = (String)cb.getServiceUtil().GetDynamicProperty(hrmors[j], "name");
+                        if (hname.Equals(this.hostName))
                         {
                             crmor = (ManagedObjectReference)crmors[i];
                             i = crmors.Count + 1;
@@ -103,11 +143,11 @@ namespace VMDeploy
                 Console.WriteLine("No Compute Resource Found On Specified Host");
                 return;
             }
+            resourcePool = cb.getServiceUtil().GetMoRefProp(crmor, "resourcePool");
 
-            ManagedObjectReference resourcePool
-               = cb.getServiceUtil().GetMoRefProp(crmor, "resourcePool");
-
-
+            /***********************************/
+            /*Setup cloning sysprep preferences*/
+            /***********************************/
 
             VirtualMachineCloneSpec cloneSpec = new VirtualMachineCloneSpec();
             VirtualMachineRelocateSpec relocSpec = new VirtualMachineRelocateSpec();
@@ -133,8 +173,7 @@ namespace VMDeploy
             custSpec.nicSettingMap = custAdapter;
 
             // Make DNS entry
-            CustomizationGlobalIPSettings custIP = new CustomizationGlobalIPSettings();
-            string[] dnsList = new string[1] { "172.16.196.41" };
+            CustomizationGlobalIPSettings custIP = new CustomizationGlobalIPSettings();            
             custIP.dnsServerList = dnsList;
             // Set DNS entry
             custSpec.globalIPSettings = custIP;
@@ -142,38 +181,62 @@ namespace VMDeploy
             // Make Sysprep entries
             CustomizationSysprep custPrep = new CustomizationSysprep(); //An object representation of a Windows sysprep.inf answer file. The sysprep type encloses all the individual keys listed in a sysprep.inf file
 
+            // Make guiRunOnce entries(to change autologon settings to login to domain)
+
+            CustomizationGuiRunOnce custGuiRunOnce = new CustomizationGuiRunOnce();
+
+            string deleteKey = "reg delete \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" /v \"DefaultDomainName\" /f";
+            string addKey = "reg add \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" /v \"DefaultDomainName\" /t REG_SZ /d " + this.joinDomain;
+            string shutdownKey = "shutdown -r -t 00 -c \"Rebooting computer\"";
+
+            custGuiRunOnce.commandList = new string[] { deleteKey, addKey, shutdownKey };
+        
+            // Set guiRunOnce
+            custPrep.guiRunOnce = custGuiRunOnce;
+
             // Make guiUnattended settings
             CustomizationGuiUnattended custGui = new CustomizationGuiUnattended(); //The GuiUnattended type maps to the GuiUnattended key in the sysprep.inf answer file
             custGui.autoLogon = true; //The GuiUnattended type maps to the GuiUnattended key in the sysprep.inf answer file
             custGui.autoLogonCount = 4; //If the AutoLogon flag is set, then the AutoLogonCount property specifies the number of times the machine should automatically log on as Administrator
+            
             CustomizationPassword custWorkPass = new CustomizationPassword();
-            custWorkPass.plainText = true; //Flag to specify whether or not the password is in plain text, rather than encrypted. 
-            custWorkPass.value = "Yv74aL5j";
-            custGui.password = custWorkPass;
 
-            custGui.timeZone = 190; //The time zone for the new virtual machine. Numbers correspond to time zones listed in sysprep documentation at  in Microsoft Technet. Taken from unattend.txt
+            if (this.workGroupPassword != null)
+            {
+                custWorkPass.plainText = true; //Flag to specify whether or not the password is in plain text, rather than encrypted. 
+                custWorkPass.value = this.workGroupPassword;
+                custGui.password = custWorkPass;
+            }
+
+            custGui.timeZone = 190; //IST The time zone for the new virtual machine. Numbers correspond to time zones listed in sysprep documentation at  in Microsoft Technet. Taken from unattend.txt
+            
             // Set guiUnattend settings
             custPrep.guiUnattended = custGui;
 
             // Make identification settings
             CustomizationIdentification custId = new CustomizationIdentification();
-            custId.domainAdmin = "administrator";
+            custId.domainAdmin = this.domainAdmin;
             CustomizationPassword custPass = new CustomizationPassword();
             custPass.plainText = true; //Flag to specify whether or not the password is in plain text, rather than encrypted. 
-            custPass.value = "Yv74aL5j";
+            custPass.value = this.domainPassword;
             custId.domainAdminPassword = custPass;
-            custId.joinDomain = "autoepo.com";
+            custId.joinDomain = this.joinDomain;
             // Set identification settings
             custPrep.identification = custId;
 
             // Make userData settings
             CustomizationUserData custUserData = new CustomizationUserData();
             CustomizationFixedName custName = new CustomizationFixedName();
-            custName.name = "TestDeploy2k8";
+            custName.name = this.name;
             custUserData.computerName = custName;
             custUserData.fullName = "ePO";
             custUserData.orgName = "McAfee";
-            custUserData.productId = "FFF9X-DY39K-2G87P-KQ4M7-QMWKT";
+
+            if (this.productId != null)
+            {
+                custUserData.productId = this.productId;
+            }
+
             // Set userData settings
             custPrep.userData = custUserData;
 
@@ -187,8 +250,8 @@ namespace VMDeploy
             cloneSpec.powerOn = true;
 
             String clonedName = cloneName;
-            Console.WriteLine("Launching clone task to create a clone: "
-                               + clonedName);
+            Console.WriteLine("Launching clone task to create a clone: " + clonedName);
+
             try
             {
                 ManagedObjectReference cloneTask
@@ -212,32 +275,42 @@ namespace VMDeploy
 
             }
         }
-        public static OptionSpec[] constructOptions()
+
+        public bool deploy()
         {
-            OptionSpec[] useroptions = new OptionSpec[3];
-            useroptions[0] = new OptionSpec("DatacenterName", "String", 1
-                                     , "Name of the Datacenter"
-                                     , null);
-            useroptions[1] = new OptionSpec("vmPath", "String", 1,
-                                            "A path to the VM inventory, example:Datacentername/vm/vmname",
-                                            null);
-            useroptions[2] = new OptionSpec("CloneName", "String", 1,
-                                            "Name of the Clone",
-                                            null);
-            return useroptions;
+            if (VMResource.connectString != null)
+            {
+                cb = AppUtil.AppUtil.initialize("VMDeploy", VMResource.connectString);
+                this.deployVM();
+                cb.disConnect();
+                
+                /* Insert code to monitor VM until agent is in place */
+
+                return true;
+            }
+            else
+            {
+                Console.Write("No connect string set, unable to connect");
+                return false;
+            }
         }
+
         public static void Main(String[] args)
         {
-            VMDeploy obj = new VMDeploy();
-            cb = AppUtil.AppUtil.initialize("VMDeploy"
-                                    , VMDeploy.constructOptions()
-                                   , args);
-            cb.connect();
-            obj.cloneVM();
-            cb.disConnect();
-            Console.WriteLine("Press any key to exit: ");
-            Console.Read();
-            Environment.Exit(1);
+            //VMDeploy obj = new VMDeploy();
+            //cb = AppUtil.AppUtil.initialize("VMDeploy"
+            //                        , VMDeploy.constructOptions()
+            //                       , args);
+            //cb.connect();
+            //obj.deployVM();
+            //cb.disConnect();
+            //Console.WriteLine("Press any key to exit: ");
+            //Console.Read();
+            //Environment.Exit(1);
+            VMResource.buildConnectString("https://localhost:4443/sdk/vimservice","localhost","4443","administrator","Yv74aL5j","Automation");
+            VMDeploy newMachine = new VMDeploy("172.16.196.23", "Win2008x32Ent", "NewTest282", new string[] { "172.16.196.41" }, "Yv74aL5j", "administrator", "Yv74aL5j", "autoepo.com", "FFF9X-DY39K-2G87P-KQ4M7-QMWKT", "MyTestClone", "Automation");
+            newMachine.deploy();
+
         }
     }
 }
